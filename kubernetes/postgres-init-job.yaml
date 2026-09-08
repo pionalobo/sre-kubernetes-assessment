@@ -1,0 +1,46 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-init
+  namespace: sre-assessment
+spec:
+  backoffLimit: 3
+
+  template:
+    spec:
+      restartPolicy: OnFailure
+
+      containers:
+        - name: postgres-init
+          image: postgres:17
+
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+
+          command:
+            - /bin/sh
+            - -c
+            - |
+              until pg_isready -h postgres -U sreuser -d sredb; do
+                echo "Waiting for PostgreSQL..."
+                sleep 2
+              done
+
+              psql \
+                -h postgres \
+                -U sreuser \
+                -d sredb \
+                -f /sql/init.sql
+
+          volumeMounts:
+            - name: init-sql
+              mountPath: /sql
+
+      volumes:
+        - name: init-sql
+          configMap:
+            name: postgres-init
